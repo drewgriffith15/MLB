@@ -15,7 +15,7 @@ library("sqldf")
 # Get year
 yearto<-iif(as.numeric(format(Sys.time(), "%m%d"))<=331,as.numeric(format(Sys.time(), "%Y"))-1,as.numeric(format(Sys.time(), "%Y")))
 
-base_url<-paste0("http://www.fangraphs.com/leaders.aspx?pos=all&stats=bat&lg=all&qual=y&type=c,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,57,58,60,72,73,74,75,76,77,78,79,80,81,82,83,102,103,104,105,106,107,108,109,110,206,207,208,209,210,211&season=",
+base_url<-paste0("http://www.fangraphs.com/leaders.aspx?pos=all&stats=bat&lg=all&qual=150&type=c,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,57,58,60,72,73,74,75,76,77,78,79,80,81,82,83,102,103,104,105,106,107,108,109,110,206,207,208,209,210,211&season=",
                  yearto, "&month=0&season1=",
                  yearto, "&ind=0&team=")
 teams<-list("1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30")
@@ -51,13 +51,13 @@ fangraphsBatting[is.na(fangraphsBatting)]<-0
 # Scrape Batted Ball Distance/Velocity Data from Baseball Savant
 htmltbl <- readHTMLTable(doc = "http://baseballsavant.com/apps/hit_leader.php?game_date=&abs=50&sort=5,1")
 babip <- data.frame(htmltbl[1])
-colnames(babip) <- c("Rank","Name","AB","MaxExitVel","MinExitVel","AvgExitVel","AvgFB_LDExitVel","AvgGBExitVel","MaxDistance","AvgFBDistance","AvgHRDistance")
+colnames(babip) <- c("Rank","Name","AB","MaxExitVel","MinExitVel","AvgExitVel","AvgFB_LDExitVel","AvgGBExitVel","MaxDistance","AvgDist","AvgHRDistance")
 # Merging datasets for analysis
 xHitting = sqldf("SELECT a.NAME,Age,
                   BABIP,GB_FB,LD_,GB_,FB_,IFFB_,IFH_,Pull_,Cent_,Oppo_,Soft_,Med_,Hard_,Contact_,Spd,
                   ISO,
                   HR_FB,wOBA,
-                  round(AvgExitVel) as AvgExitVel,round(AvgFBDistance) as AvgFBDistance
+                  round(AvgExitVel) as AvgExitVel,round(AvgDist) as AvgDist
                  FROM fangraphsBatting a
                  JOIN babip b ON a.NAME = b.NAME
                  ")
@@ -70,30 +70,20 @@ xBABIP_out <- subset(xBABIP_out, select = c(Name,BABIP,xBABIP,Gap))
 xBABIP_out = xBABIP_out[order(-xBABIP_out$Gap),]
 
 ############### xPected ISO #######################
-xISO.fit = lm(ISO~FB_+Pull_+Hard_+AvgFBDistance, data=xHitting)
+xISO.fit = lm(ISO~FB_+Pull_+Hard_+AvgDist, data=xHitting)
 summary(xISO.fit)
 xISO_out = cbind(xHitting,'xISO'=round(xISO.fit$fitted.values,3), 'Gap'=round(xISO.fit$residuals,3))
-xISO_out <- subset(xISO_out, select = c(Name,ISO,xISO,Gap))
+xISO_out <- subset(xISO_out, select = c(Name,Hard_,AvgDist,ISO,xISO,Gap))
 xISO_out = xISO_out[order(-xISO_out$Gap),]
 
 ################ xPected HR/FB #######################
-xHR.FB.fit = lm(HR_FB~+FB_+Pull_+Hard_+AvgFBDistance, data=xHitting)
+xHR.FB.fit = lm(HR_FB~+FB_+Pull_+Hard_+AvgDist, data=xHitting)
 summary(xHR.FB.fit)
 xHR_FB_output = cbind(xHitting,'xHR_FB'=round(xHR.FB.fit$fitted.values,2), 'Gap'=round(xHR.FB.fit$residuals,2))
-xHR_FB_output <- subset(xHR_FB_output, select = c(Name,HR_FB,xHR_FB,Gap))
+xHR_FB_output <- subset(xHR_FB_output, select = c(Name,Hard_,AvgDist,HR_FB,xHR_FB,Gap))
 xHR_FB_output = xHR_FB_output[order(-xHR_FB_output$Gap),]
 
-# SELL!
-# head(xBABIP_out,20)
-# head(xISO_out,20)
-# head(xHR_FB_output,20)
-
-# BUY!!
-# tail(xBABIP_out,20)
-# tail(xISO_out,20)
-# tail(xHR_FB_output,20)
-
-projectx <- sqldf("select h.Name, h.AvgExitVel as AvgVelo, h.AvgFBDistance as AvgDist,
+projectx <- sqldf("select h.Name, h.AvgExitVel as AvgVelo, h.AvgDist as AvgDist,
                           h.Hard_,h.Pull_,Oppo_,Contact_,Spd,
                           a.BABIP,a.xBABIP,a.Gap as GAPxBABIP,
                           b.ISO, b.xISO, b.Gap as GAPxISO,
@@ -109,13 +99,11 @@ projectx <- sqldf("select h.Name, h.AvgExitVel as AvgVelo, h.AvgFBDistance as Av
 ################xPected wOBA ##########################
 
 # Using the xBABIP,xISO and xHR_FB, calculate the xOBP
-wOBA.fit = lm(wOBA~+Hard_+Pull_+Oppo_+Contact_+Spd+AvgDist+xBABIP+xISO+xHR_FB, data=projectx)
+wOBA.fit = lm(wOBA~+Hard_+Pull_+Oppo_+Contact_+Spd+AvgVelo+AvgDist+xBABIP+xISO+xHR_FB, data=projectx)
 summary(wOBA.fit)
 xwOBA_output = cbind(projectx,'xwOBA'=round(wOBA.fit$fitted.values,3), 'xwOBA_Gap'=round(wOBA.fit$residuals,3))
 # xwOBA_output <- subset(xwOBA_output, select = c(Name,FB_,Pull_,Hard_,AvgExitVel,AvgDist,xwOBA,Gap))
 xwOBA_output = xwOBA_output[order(xwOBA_output$xwOBA),]
-
-tail(xwOBA_output,20)
 
 #######################################################
 
@@ -158,6 +146,16 @@ xHitting<-sqldf("select distinct oba.Name,oba.AvgVelo,oba.AvgDist,
                  round((zip.AB*-1)+(zip.x1B*6)+(zip.x2B*9)+(zip.x3B*12)+(zip.HR*16)+((zip.BB+zip.HBP)*3)+(zip.SB*3)+(zip.CS*-4)) as ZipsRoS
                  from zipsBatting zip
                  join xwOBA_output oba on zip.name = oba.name
+                 order by xwOBA asc
                  ")
-xHitting <- xHitting[order(-xHitting$xwOBA_Gap),]
-xHitting
+
+# SELL!
+# head(xBABIP_out,20)
+# head(xISO_out,20)
+# head(xHR_FB_output,20)
+
+# BUY!!
+# tail(xBABIP_out,20)
+tail(xISO_out,20)
+tail(xHR_FB_output,20)
+tail(xwOBA_output,20)
