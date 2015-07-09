@@ -103,7 +103,7 @@ wOBA.fit = lm(wOBA~+Hard_+Pull_+Oppo_+Contact_+Spd+AvgVelo+AvgDist+xBABIP+xISO+x
 summary(wOBA.fit)
 xwOBA_output = cbind(projectx,'xwOBA'=round(wOBA.fit$fitted.values,3), 'xwOBA_Gap'=round(wOBA.fit$residuals,3))
 # xwOBA_output <- subset(xwOBA_output, select = c(Name,FB_,Pull_,Hard_,AvgExitVel,AvgDist,xwOBA,Gap))
-xwOBA_output = xwOBA_output[order(xwOBA_output$xwOBA),]
+xwOBA_output = xwOBA_output[order(-xwOBA_output$xwOBA_Gap),]
 
 #######################################################
 
@@ -140,7 +140,7 @@ zipsBatting[is.na(zipsBatting)]<-0
 # Calculate singles in zips projections
 zipsBatting$x1B<-zipsBatting$H-(zipsBatting$x2B+zipsBatting$x3B+zipsBatting$HR)
 
-xHitting<-sqldf("select distinct oba.Name,oba.AvgVelo,oba.AvgDist,
+xHitting<-sqldf("select distinct oba.Name,oba.AvgVelo,oba.AvgDist,zip.PA,
                         oba.BABIP,oba.xBABIP,oba.GAPxBABIP,oba.ISO,oba.xISO,oba.GAPxISO,oba.HR_FB,oba.xHR_FB,oba.GAPxHR_FB,oba.wOBA,oba.xwOBA,oba.xwOBA_Gap,
                         zip.wOBA as zipswOBA, oba.wOBA-zip.wOBA as zipswOBA_GAP,
                  round((zip.AB*-1)+(zip.x1B*6)+(zip.x2B*9)+(zip.x3B*12)+(zip.HR*16)+((zip.BB+zip.HBP)*3)+(zip.SB*3)+(zip.CS*-4)) as ZipsRoS
@@ -159,3 +159,14 @@ xHitting<-sqldf("select distinct oba.Name,oba.AvgVelo,oba.AvgDist,
 tail(xISO_out,20)
 tail(xHR_FB_output,20)
 tail(xwOBA_output,20)
+
+xRoS.fit <- lm(ZipsRoS~PA+zipswOBA, data=xHitting)
+summary(xRoS.fit)
+newdf <- subset(xHitting,select = c(PA, xwOBA))
+colnames(newdf) <- c("PA","zipswOBA")
+tmp.df <- data.frame(round(predict(xRoS.fit,newdata = newdf))); colnames(tmp.df) <- c("xRoS")
+xHitting$xRoS <- tmp.df
+xHitting <- xHitting[order(xHitting$xRoS),]
+tail(xHitting,50)
+
+# END
