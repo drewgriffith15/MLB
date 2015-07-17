@@ -1,5 +1,7 @@
 # Analysis based on following article on Fangraphs:
 # http://www.fangraphs.com/blogs/bettermatch-up-data-forecasting-strikeout-rate/
+# http://www.fangraphs.com/fantasy/potential-starting-pitcher-strikeout-rate-surgers/
+# http://www.fangraphs.com/fantasy/the-bestest-pitcher-expected-bb-formula-yet/
 
 # Load libraries
 library("griffun")

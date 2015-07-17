@@ -2,6 +2,7 @@
 # http://www.fangraphs.com/fantasy/muscling-up-iso-surgers/
 # http://www.fangraphs.com/fantasy/new-hitter-xbabip-based-on-bis-batted-ball-data/
 # http://www.fangraphs.com/fantasy/nl-outfield-poweriso-buy-low-candidates/
+# http://www.fangraphs.com/fantasy/is-it-time-to-move-past-hrfb-rate/
 
 # Load libraries
 library("griffun")
@@ -43,8 +44,12 @@ for(i in c(1,4:ncol(fangraphsBatting))) {
   fangraphsBatting[,i]<-as.numeric(as.character(fangraphsBatting[,i]))
 }
 
+# Calculated HR/Batted Ball 
+fangraphsBatting$HR_BB <- iif(fangraphsBatting$HR > 0,round((fangraphsBatting$HR / (fangraphsBatting$LD+fangraphsBatting$GB+fangraphsBatting$FB+fangraphsBatting$BUH)) * 100,2), 0)
+
 # replace NA with 0
 fangraphsBatting[is.na(fangraphsBatting)]<-0
+
 
 # summary(fangraphsBatting)
 
@@ -55,7 +60,7 @@ colnames(babip) <- c("Rank","Name","AB","MaxExitVel","MinExitVel","AvgExitVel","
 # Merging datasets for analysis
 xHitting = sqldf("SELECT a.NAME,Age,
                  BABIP,GB_FB,LD_,GB_,FB_,IFFB_,IFH_,Pull_,Cent_,Oppo_,Soft_,Med_,Hard_,Contact_,Spd,
-                 ISO,
+                 ISO,HR_BB,
                  HR_FB,wOBA,
                  round(AvgExitVel) as AvgExitVel,round(AvgDist) as AvgDist
                  FROM fangraphsBatting a
@@ -69,37 +74,37 @@ xBABIP_out = cbind(xHitting,'xBABIP'=round(xBABIP.fit$fitted.values,3), 'Gap'=ro
 xBABIP_out <- subset(xBABIP_out, select = c(Name,BABIP,xBABIP,Gap))
 xBABIP_out = xBABIP_out[order(-xBABIP_out$Gap),]
 
-############### xPected ISO #######################
+############### xPected ISO #########################
 xISO.fit = lm(ISO~FB_+Pull_+Hard_+AvgDist, data=xHitting)
 summary(xISO.fit)
 xISO_out = cbind(xHitting,'xISO'=round(xISO.fit$fitted.values,3), 'Gap'=round(xISO.fit$residuals,3))
 xISO_out <- subset(xISO_out, select = c(Name,Hard_,AvgDist,ISO,xISO,Gap))
 xISO_out = xISO_out[order(-xISO_out$Gap),]
 
-################ xPected HR/FB #######################
-xHR.FB.fit = lm(HR_FB~+FB_+Pull_+Hard_+AvgDist, data=xHitting)
-summary(xHR.FB.fit)
-xHR_FB_output = cbind(xHitting,'xHR_FB'=round(xHR.FB.fit$fitted.values,2), 'Gap'=round(xHR.FB.fit$residuals,2))
-xHR_FB_output <- subset(xHR_FB_output, select = c(Name,Hard_,AvgDist,HR_FB,xHR_FB,Gap))
-xHR_FB_output = xHR_FB_output[order(-xHR_FB_output$Gap),]
+############### xPected HR_BB#################
+xHR.BB.fit = lm(HR_BB~+FB_+Pull_+Hard_+AvgDist, data=xHitting)
+summary(xHR.BB.fit)
+xHR_BB_output = cbind(xHitting,'xHR_BB'=round(xHR.BB.fit$fitted.values,2), 'Gap'=round(xHR.BB.fit$residuals,2))
+xHR_BB_output <- subset(xHR_BB_output, select = c(Name,Hard_,AvgDist,HR_BB,xHR_BB,Gap))
+xHR_BB_output = xHR_BB_output[order(-xHR_BB_output$Gap),]
 
 projectx <- sqldf("select h.Name, h.AvgExitVel as AvgVelo, h.AvgDist as AvgDist,
                   h.Hard_,h.Pull_,Oppo_,Contact_,Spd,
                   a.BABIP,a.xBABIP,a.Gap as GAPxBABIP,
                   b.ISO, b.xISO, b.Gap as GAPxISO,
-                  c.HR_FB,c.xHR_FB,c.Gap as GAPxHR_FB,
+                  c.HR_BB,c.xHR_BB,c.Gap as GAPxHR_BB,
                   h.wOBA
                   from xHitting h
                   join xBABIP_out a on h.name = a.name
                   join xISO_out b on b.Name = h.Name
-                  join xHR_FB_output c on c.name = h.name
+                  join xHR_BB_output c on c.name = h.name
                   order by b.gap desc
                   ")
 
 ################xPected wOBA ##########################
 
-# Using the xBABIP,xISO and xHR_FB, calculate the xOBP
-wOBA.fit = lm(wOBA~+Hard_+Pull_+Oppo_+Contact_+Spd+AvgVelo+AvgDist+xBABIP+xISO+xHR_FB, data=projectx)
+# Using the xBABIP,xISO and xHR_BB, calculate the xwOBA
+wOBA.fit = lm(wOBA~+Hard_+Pull_+Oppo_+Contact_+Spd+AvgVelo+AvgDist+xBABIP+xISO+xHR_BB, data=projectx)
 summary(wOBA.fit)
 xwOBA_output = cbind(projectx,'xwOBA'=round(wOBA.fit$fitted.values,3), 'xwOBA_Gap'=round(wOBA.fit$residuals,3))
 # xwOBA_output <- subset(xwOBA_output, select = c(Name,FB_,Pull_,Hard_,AvgExitVel,AvgDist,xwOBA,Gap))
@@ -109,14 +114,14 @@ xwOBA_output = xwOBA_output[order(-xwOBA_output$xwOBA_Gap),]
 
 # SELL!
 # head(xBABIP_out,20)
-# head(xISO_out,20)
-# head(xHR_FB_output,20)
+head(xISO_out,20)
+head(xHR_BB_output,20)
 
 # BUY!!
-tail(xBABIP_out,20)
+# tail(xBABIP_out,20)
 tail(xISO_out,20)
-tail(xHR_FB_output,20)
-tail(xwOBA_output,20)
+tail(xHR_BB_output,20)
+# tail(xwOBA_output,20)
 
 
 # END
