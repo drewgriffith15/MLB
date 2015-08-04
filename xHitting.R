@@ -58,7 +58,7 @@ htmltbl <- readHTMLTable(doc = "http://baseballsavant.com/apps/hit_leader.php?ga
 babip <- data.frame(htmltbl[1])
 colnames(babip) <- c("Rank","Name","AB","MaxExitVel","MinExitVel","AvgExitVel","AvgFB_LDExitVel","AvgGBExitVel","MaxDistance","AvgDist","AvgHRDistance")
 # Merging datasets for analysis
-xHitting = sqldf("SELECT a.NAME,Age,
+xHit <- sqldf("SELECT a.NAME,Age,
                  BABIP,GB_FB,LD_,GB_,FB_,IFFB_,IFH_,Pull_,Cent_,Oppo_,Soft_,Med_,Hard_,Contact_,Spd,
                  ISO,HR_BB,
                  HR_FB,wOBA,
@@ -68,33 +68,33 @@ xHitting = sqldf("SELECT a.NAME,Age,
                  ")
 
 ############### xPected XBABIP #######################
-xBABIP.fit = lm(BABIP~GB_FB+LD_+FB_+IFFB_+IFH_+Pull_+Cent_+Oppo_+Hard_+Spd, data=xHitting)
+xBABIP.fit <- lm(BABIP~GB_FB+LD_+FB_+IFFB_+IFH_+Pull_+Cent_+Oppo_+Hard_+Spd+AvgExitVel, data=xHit)
 summary(xBABIP.fit)
-xBABIP_out = cbind(xHitting,'xBABIP'=round(xBABIP.fit$fitted.values,3), 'Gap'=round(xBABIP.fit$residuals,3))
+xBABIP_out <- cbind(xHit,'xBABIP'=round(xBABIP.fit$fitted.values,3), 'Gap'=round(xBABIP.fit$residuals,3))
 xBABIP_out <- subset(xBABIP_out, select = c(Name,BABIP,xBABIP,Gap))
-xBABIP_out = xBABIP_out[order(-xBABIP_out$Gap),]
+xBABIP_out <- xBABIP_out[order(xBABIP_out$xBABIP),]
 
 ############### xPected ISO #########################
-xISO.fit = lm(ISO~FB_+Pull_+Hard_+AvgDist, data=xHitting)
+xISO.fit <- lm(ISO~FB_+Pull_+Hard_+AvgDist+AvgExitVel, data=xHit)
 summary(xISO.fit)
-xISO_out = cbind(xHitting,'xISO'=round(xISO.fit$fitted.values,3), 'Gap'=round(xISO.fit$residuals,3))
+xISO_out <- cbind(xHit,'xISO'=round(xISO.fit$fitted.values,3), 'Gap'=round(xISO.fit$residuals,3))
 xISO_out <- subset(xISO_out, select = c(Name,Hard_,AvgDist,ISO,xISO,Gap))
-xISO_out = xISO_out[order(-xISO_out$Gap),]
+xISO_out <- xISO_out[order(xISO_out$xISO),]
 
 ############### xPected HR_BB#################
-xHR.BB.fit = lm(HR_BB~+FB_+Pull_+Hard_+AvgDist, data=xHitting)
+xHR.BB.fit <- lm(HR_BB~+FB_+Pull_+Hard_+AvgDist+AvgExitVel, data=xHit)
 summary(xHR.BB.fit)
-xHR_BB_output = cbind(xHitting,'xHR_BB'=round(xHR.BB.fit$fitted.values,2), 'Gap'=round(xHR.BB.fit$residuals,2))
+xHR_BB_output <- cbind(xHit,'xHR_BB'=round(xHR.BB.fit$fitted.values,2), 'Gap'=round(xHR.BB.fit$residuals,2))
 xHR_BB_output <- subset(xHR_BB_output, select = c(Name,Hard_,AvgDist,HR_BB,xHR_BB,Gap))
-xHR_BB_output = xHR_BB_output[order(-xHR_BB_output$Gap),]
+xHR_BB_output <- xHR_BB_output[order(xHR_BB_output$xHR_BB),]
 
 projectx <- sqldf("select h.Name, h.AvgExitVel as AvgVelo, h.AvgDist as AvgDist,
-                  h.Hard_,h.Pull_,Oppo_,Contact_,Spd,
-                  a.BABIP,a.xBABIP,a.Gap as GAPxBABIP,
-                  b.ISO, b.xISO, b.Gap as GAPxISO,
-                  c.HR_BB,c.xHR_BB,c.Gap as GAPxHR_BB,
+                  h.Hard_,h.Pull_,Contact_,
+                  a.xBABIP, b.ISO, b.xISO,
+                  c.HR_BB,c.xHR_BB,
+                  b.Gap as GAPxISO,c.Gap as GAPxHR_BB,
                   h.wOBA
-                  from xHitting h
+                  from xHit h
                   join xBABIP_out a on h.name = a.name
                   join xISO_out b on b.Name = h.Name
                   join xHR_BB_output c on c.name = h.name
@@ -104,23 +104,15 @@ projectx <- sqldf("select h.Name, h.AvgExitVel as AvgVelo, h.AvgDist as AvgDist,
 ################xPected wOBA ##########################
 
 # Using the xBABIP,xISO and xHR_BB, calculate the xwOBA
-wOBA.fit = lm(wOBA~+Hard_+Pull_+Oppo_+Contact_+Spd+AvgVelo+AvgDist+xBABIP+xISO+xHR_BB, data=projectx)
+wOBA.fit <- lm(wOBA~+Hard_+Pull_+Contact_+AvgVelo+AvgDist+xBABIP+xISO+xHR_BB, data=projectx)
 summary(wOBA.fit)
-xwOBA_output = cbind(projectx,'xwOBA'=round(wOBA.fit$fitted.values,3), 'xwOBA_Gap'=round(wOBA.fit$residuals,3))
-# xwOBA_output <- subset(xwOBA_output, select = c(Name,FB_,Pull_,Hard_,AvgExitVel,AvgDist,xwOBA,Gap))
-xwOBA_output = xwOBA_output[order(-xwOBA_output$xwOBA_Gap),]
+xwOBA_output <- cbind(projectx,'xwOBA'=round(wOBA.fit$fitted.values,3), 'GapxwOBA_'=round(wOBA.fit$residuals,3))
+xwOBA_output <- subset(xwOBA_output, xHR_BB > 0, select = c(Name,AvgVelo,AvgDist,Hard_,Pull_,ISO,xISO,HR_BB,xHR_BB,wOBA,xwOBA,GAPxISO,GAPxHR_BB,GapxwOBA_))
+xHitting <- xwOBA_output[order(-xwOBA_output$GAPxISO),]
 
 #######################################################
 
-# SELL!
-# head(xBABIP_out,20)
-head(xISO_out,20)
-head(xHR_BB_output,20)
-
-# BUY!!
-# tail(xBABIP_out,20)
-tail(xISO_out,20)
-tail(xHR_BB_output,20)
-# tail(xwOBA_output,20)
+# Aim for players with -Gap
+tail(xHitting,25)
 
 # END

@@ -15,8 +15,8 @@ library("sqldf")
 # Get year
 yearto<-iif(as.numeric(format(Sys.time(), "%m%d"))<=331,as.numeric(format(Sys.time(), "%Y"))-1,as.numeric(format(Sys.time(), "%Y")))
 
-base_url<-paste0("http://www.fangraphs.com/leaders.aspx?pos=all&stats=pit&lg=all&qual=y&type=c,4,5,7,8,11,12,13,15,16,17,18,19,20,21,114,24,36,37,40,113,112,111,76,77,81,211,43,50,44,47,48,49,51,218,219,220,221,222,223,6,45,122,3,59&season=",
-                 yearto, "&month=0&season1=",
+base_url<-paste0("http://www.fangraphs.com/leaders.aspx?pos=all&stats=pit&lg=all&qual=10&type=c,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,59,62,75,76,77,81,83,105,106,107,108,109,110,111,112,113,114,120,121,122,218,219,220,221,222,223&season=",
+                 yearto, "&month=3&season1=", # month=0 - full season; month=3 - 30 days
                  yearto, "&ind=0&team=")
 teams<-list("1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30")
 urls<-paste0(base_url, rep(teams, each=1),
@@ -32,7 +32,7 @@ for(i in 1:30) {
 }
 
 # Rename columns
-colnames(fangraphsPitching)<-c("Number","Name","Team","W","L","G","GS","SV","BS","IP","H","R","ER","HR","BB","IBB","HBP","HLD","SO","K_9","BB_9","HR_9","SwStr_","F_Strike_","Zone_","FBv","SL_","CB_","Pace","BABIP","IFFB_","LOB_","LD_","GB_","FB_","HR_FB","Pull_","Cent_","Oppo_","Soft_","Med_","Hard_","ERA","FIP","SIERA","Age","WAR")
+colnames(fangraphsPitching)<-c("Number","Name","Team","Age","W","L","ERA","G","GS","CG","ShO","SV","BS","IP","TBF","H","R","ER","HR","BB","IBB","HBP","WP","BK","SO","GB","FB","LD","IFFB","Balls","Strikes","Pitches","RS","IFH","BU","BUH","K_9","BB_9","K_BB","H_9","HR_9","AVG","WHIP","BABIP","LOB_","FIP","GB_FB","LD_","GB_","FB_","IFFB_","HR_FB","IFH_","BUH_","WAR","xFIP","FB__","FBv","SL_","CB_","CH_","OSwing_","ZSwing_","Swing_","OContact_","ZContact_","Contact_","Zone_","FStrike_","SwStr_","HLD","K_","BB_","SIERA","Pull_","Cent_","Oppo_","Soft_","Med_","Hard_")
 # str(fangraphsPitching)
 
 # Remove percentages
@@ -45,63 +45,37 @@ for(i in c(1,4:ncol(fangraphsPitching))) {
   fangraphsPitching[,i]<-as.numeric(as.character(fangraphsPitching[,i]))
 }
 
+# Calculated HR/Batted Ball 
+fangraphsPitching$HR_BB <- iif(fangraphsPitching$HR > 0,round((fangraphsPitching$HR / (fangraphsPitching$LD+fangraphsPitching$GB+fangraphsPitching$FB+fangraphsPitching$BUH)) * 100,2), 0)
+
 # replace NA with 0
 fangraphsPitching[is.na(fangraphsPitching)]<-0
 
 # summary(fangraphsPitching)
 
-# Data aquired from baseballheatmaps.com of current year leaderboard HTML table
-y1=readHTMLTable(doc = "http://www.baseballheatmaps.com/graph/pitcherdistanceleader.php")
-bhp.hrfb = data.frame(y1[1])
-colnames(bhp.hrfb) <- c("Rank","Name","Stance","Year","Hits","Distance","Angle")
-head(bhp.hrfb)
-
-# Data aquired from baseballheatmaps.com of current year leaderboard HTML table
-y2=readHTMLTable(doc = "http://www.baseballheatmaps.com/graph/pitcherdistancenobuntleader.php")
-bhp.all.bb.dist = data.frame(y2[1])
-colnames(bhp.all.bb.dist) <- c("Rank","Name","Year","Hits","Distance")
-head(bhp.all.bb.dist)
-
-# Combine baseballheatmaps.com leaderboard data
-hrfbdist = bhp.hrfb; allbbdist = bhp.all.bb.dist
-bhmPIT = sqldf("SELECT A.NAME,
-               A.YEAR,
-               avg(A.HITS) AS TOTALHRFB,
-               avg(A.DISTANCE) AS HRFBDIST,
-               avg(B.HITS) AS TOTALBABIP,
-               avg(B.DISTANCE) BABIPDIST
-               FROM hrfbdist A
-               JOIN allbbdist B
-               ON A.NAME = B.NAME
-               AND A.YEAR = B.YEAR
-               GROUP BY A.NAME,
-               A.YEAR")
-
-# fix inverted names
-bhmPIT$Name = reverse_name(bhmPIT$Name)
-bhmPIT$Name = str_replace_all(bhmPIT$Name,"Douglas Fister","Doug Fister")
-bhmPIT$Name = str_replace_all(bhmPIT$Name,"Randall Wojciechowski","Asher Wojciechowski")
-
 # str(fangraphsPitching)
-xPitching = sqldf("SELECT a.Name, K_9,BB_9,HR_9,Round(SwStr_,2) SwStr_, BABIP, round(LOB_,2) LOB_, 
-                  F_Strike_,Zone_,FBv,Pull_,Cent_,Oppo_,Soft_,Med_,Hard_,
-                  round(HR_FB,2) HR_FB, era, fip,
-                  round((K_9-BB_9)+SwStr_+FBv+WAR+Zone_+Soft_+(IP*.1)-ABS(Age-26),2) as STUFF,                  
-                  round(HRFBDist) HRFBDist, round(BABIPDist) BBDist, 
-                  FIP-ERA as Luck
-                  from fangraphsPitching a 
-                  join bhmPIT b on a.Name = b.Name
+xPitch = sqldf("SELECT a.Name, IP, SV, HLD, FBv, K_, BB_,
+                  SwStr_,OSwing_,ZSwing_,Swing_,OContact_,ZContact_,
+                  Zone_,Hard_,round(HR_BB,2) as HR_BB, ERA, FIP, SIERA
+                  from fangraphsPitching a
+                  where (IP >= 20 or SV > 2 or HLD > 2)
                   ")
 
-xPitching$STUFF = rank(-xPitching$STUFF,ties.method= "max")
-
-xPitching$BBDist[is.na(xPitching$BBDist)] <- 0
+############### xPected K% ########################
+xK_.fit = lm(K_~IP+SwStr_+OSwing_+ZSwing_+Swing_+OContact_+ZContact_+Zone_+FBv, data=xPitch)
+summary(xK_.fit)
+xPitch = cbind(xPitch,'xK_'=round(xK_.fit$fitted.values,2), 'GapxK_'=round(xK_.fit$residuals,2))
 
 ############### xPected FIP #######################
-xFIP.fit = lm(FIP~SwStr_+Soft_+Hard_+STUFF+HRFBDist+BBDist, data=xPitching)
-summary(xFIP.fit);
-xFIP.output = cbind(xPitching,'xFIP'=round(xFIP.fit$fitted.values,2), 'Gap'=round(xFIP.fit$residuals,2))
-xFIP.output = xFIP.output[order(xFIP.output$Gap),]
-xFIP.output <- subset(xFIP.output, xFIP < 5 & xFIP > 2.5) # Removing outliers
-head(xFIP.output,20); #SELL!!
-tail(xFIP.output,20) #BUY!!
+xFIP.fit = lm(FIP~IP+OSwing_+FBv+Hard_+ERA+SIERA, data=xPitch)
+summary(xFIP.fit)
+xPitch = cbind(xPitch,'xFIP'=round(xFIP.fit$fitted.values,2), 'GapxFIP'=round(xFIP.fit$residuals,2))
+xPitching <- subset(xPitch, xFIP < 5, select = c(Name,IP,SV,HLD,FBv,K_,xK_,BB_,HR_BB,SwStr_,SIERA,ERA,FIP,xFIP,GapxFIP,GapxK_))
+xPitching = xPitching[order(xPitching$GapxFIP),]
+
+#######################################################
+
+# Aim for players with -Gap on xK% and +Gap for xFIP
+tail(xPitching,25)
+
+# END
