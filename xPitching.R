@@ -58,7 +58,7 @@ xPitch = sqldf("SELECT a.Name, IP, SV, HLD, FBv, K_, BB_,
                   SwStr_,OSwing_,ZSwing_,Swing_,OContact_,ZContact_,
                   Zone_,Hard_,round(HR_BB,2) as HR_BB, ERA, FIP, SIERA
                   from fangraphsPitching a
-                  where (IP >= 20 or SV > 2 or HLD > 2)
+                  where (IP >= 20 or SV > 3 or HLD > 3)
                   ")
 
 ############### xPected K% ########################

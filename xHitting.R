@@ -113,6 +113,7 @@ xHitting <- xwOBA_output[order(-xwOBA_output$GAPxISO),]
 #######################################################
 
 # Aim for players with -Gap
+
 tail(xHitting,25)
 
 # END
