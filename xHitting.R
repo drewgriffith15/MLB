@@ -115,5 +115,7 @@ xHitting <- xwOBA_output[order(-xwOBA_output$GAPxISO),]
 # Aim for players with -Gap
 
 tail(xHitting,25)
+csv_name <- paste("xHitting",".csv", sep = '')
+write.table(xHitting,file=csv_name,sep=",",row.names=F)
 
 # END
