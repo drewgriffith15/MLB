@@ -10,7 +10,17 @@ library("plyr")
 library("data.table")
 library("sqldf")
 
-# Get years
+#################################################################################################
+
+# Get ESPN league Position Eligibility for Hitters AND Pitchers
+EligibilityH <- ESPN.eligibility()$Hitters
+EligibilityP <- ESPN.eligibility()$Pitchers
+
+# Get ESPN league point projections for Hitters AND Pitchers in WAR Games league
+WARGamesHitters <- ESPNProjections(86607)$Hitters
+WARGamesPitchers <- ESPNProjections(86607)$Pitchers
+
+# Get last three years
 yearto <-
   iif(as.numeric(format(Sys.time(), "%m%d")) <= 331,as.numeric(format(Sys.time(), "%Y")) -
         1,as.numeric(format(Sys.time(), "%Y")))
@@ -18,487 +28,19 @@ yearfrom <-
   iif(as.numeric(format(Sys.time(), "%m%d")) <= 331,as.numeric(format(Sys.time(), "%Y")) -
         3,as.numeric(format(Sys.time(), "%Y")) - 2)
 
-#################################################################################################
+# Scrape Fangraphs leaderboards from last three years
+fangraphsBatting <- FanGraphs.hitting(yearfrom,yearto, 200, 0) # min 200 PA
+# str(fangraphsBatting)
 
-# Get ESPN league Position Eligibility for Hitters
-base_url <-
-  paste0("http://games.espn.go.com/flb/tools/eligibility?startIndex=")
-indx <-
-  list(
-    "0","50","100","150","200","250","300","350","400","450","500","550","600","650","700","750","800","850","900"
-  )
-urls <-
-  paste0(base_url, rep(indx, each = 1), "&slotCategoryGroup=1")
-
-# Scrape
-ESPN <-
-  lapply(urls, function(x) {
-    data.table(readHTMLTable(x, as.data.frame = TRUE, stringsAsFactors = FALSE)$playertable_0[-1,]) # removing first row
-  })
-
-# Combine Scrapes
-EligibilityH <- c()
-for (i in c(1:18)) {
-  EligibilityH <-
-    as.data.frame(rbind(EligibilityH,ESPN[[i]]))
-}
-
-# Rename columns
-colnames(EligibilityH) <-
-  c("NameTeamPos","BLANK","C","x1B","x2B","x3B","SS","LF","CF","RF","DH","SP","RP")
-
-# Remove DTD/SSPD/DL
-EligibilityH$NameTeamPos <-
-  str_trim(gsub("DTD", "", EligibilityH$NameTeamPos))
-EligibilityH$NameTeamPos <-
-  str_trim(gsub("SSPD", "", EligibilityH$NameTeamPos))
-EligibilityH$NameTeamPos <-
-  str_trim(gsub("DL60", "", EligibilityH$NameTeamPos))
-EligibilityH$NameTeamPos <-
-  str_trim(gsub("DL15", "", EligibilityH$NameTeamPos))
-
-# Parse Name
-EligibilityH$Name <- gsub(",.*$", "", EligibilityH$NameTeamPos)
-EligibilityH$Name <-
-  str_trim(gsub('[^.a-zA-Z0-9]',' ',EligibilityH$Name))
-
-EligibilityH <- sqldf(
-  "select Name,
-  case when C <> '--' then 'C'
-      when x1B <> '--' then '1B'
-      when x2B <> '--' then '2B'
-      when x3B <> '--' then '3B'
-      when SS <> '--' then 'SS'
-      when LF <> '--' then 'OF'
-      when CF <> '--' then 'OF'
-      when RF <> '--' then 'OF'
-      when DH <> '--' then 'DH'
-      when SP <> '--' then 'SP'
-      when RP <> '--' then 'RP'
-  else '--' end as Position
-  from EligibilityH
- "
-)
-
-# ---------------------------------------------
-
-# Get ESPN league Position Eligibility for Pitchers
-base_url <-
-  paste0("http://games.espn.go.com/flb/tools/eligibility?startIndex=")
-indx <-
-  list(
-    "0","50","100","150","200","250","300","350","400","450","500","550","600","650","700","750","800","850","900"
-  )
-urls <-
-  paste0(base_url, rep(indx, each = 1), "&slotCategoryGroup=2")
-
-# Scrape
-ESPN <-
-  lapply(urls, function(x) {
-    data.table(readHTMLTable(x, as.data.frame = TRUE, stringsAsFactors = FALSE)$playertable_0[-1,]) # removing first row
-  })
-
-# Combine Scrapes
-EligibilityP <- c()
-for (i in c(1:18)) {
-  EligibilityP <-
-    as.data.frame(rbind(EligibilityP,ESPN[[i]]))
-}
-
-# Rename columns
-colnames(EligibilityP) <-
-  c("NameTeamPos","BLANK","C","x1B","x2B","x3B","SS","LF","CF","RF","DH","SP","RP")
-
-# Remove DTD/SSPD/DL
-EligibilityP$NameTeamPos <-
-  str_trim(gsub("DTD", "", EligibilityP$NameTeamPos))
-EligibilityP$NameTeamPos <-
-  str_trim(gsub("SSPD", "", EligibilityP$NameTeamPos))
-EligibilityP$NameTeamPos <-
-  str_trim(gsub("DL60", "", EligibilityP$NameTeamPos))
-EligibilityP$NameTeamPos <-
-  str_trim(gsub("DL15", "", EligibilityP$NameTeamPos))
-
-# Parse Name
-EligibilityP$Name <- gsub(",.*$", "", EligibilityP$NameTeamPos)
-EligibilityP$Name <-
-  str_trim(gsub('[^.a-zA-Z0-9]',' ',EligibilityP$Name))
-
-EligibilityP <- sqldf(
-  "select Name,
-  case when C <> '--' then 'C'
-  when x1B <> '--' then '1B'
-  when x2B <> '--' then '2B'
-  when x3B <> '--' then '3B'
-  when SS <> '--' then 'SS'
-  when LF <> '--' then 'OF'
-  when CF <> '--' then 'OF'
-  when RF <> '--' then 'OF'
-  when DH <> '--' then 'DH'
-  when SP <> '--' then 'SP'
-  when RP <> '--' then 'RP'
-  else '--' end as Position
-  from EligibilityP
-  "
-)
-
-###############################################################################################
-
-# Get ESPN league point projections for HITTERS
-base_url <-
-  paste0(
-    "http://games.espn.go.com/flb/tools/projections?leagueId=86607&slotCategoryGroup=1&startIndex="
-  )
-indx <-
-  list(
-    "0","40","80","120","160","200","240","280","320","360","400","440","480","520","560","600","640"
-  )   #seq(0, 900, 50)
-urls <- paste0(base_url, rep(indx, each = 1))
-
-# Scrape
-ESPNproj <-
-  lapply(urls, function(x) {
-    data.table(readHTMLTable(x, as.data.frame = TRUE, stringsAsFactors = FALSE)$playertable_0[-1,]) # removing first row
-  })
-
-# Combine Scrapes
-ESPNprojections <- c()
-for (i in c(1:15)) {
-  ESPNprojections <-
-    as.data.frame(rbind(ESPNprojections,ESPNproj[[i]]))
-}
-
-# Rename columns
-colnames(ESPNprojections) <-
-  c(
-    "Number","NameTeamPos","FA","BLANK","AB","1B","2B","3B","HR","BB","HBP","SAC","SB","CS","PTS"
-  )
-
-# Remove DTD/SSPD/DL
-ESPNprojections$NameTeamPos <-
-  str_trim(gsub("DTD", "", ESPNprojections$NameTeamPos))
-ESPNprojections$NameTeamPos <-
-  str_trim(gsub("SSPD", "", ESPNprojections$NameTeamPos))
-ESPNprojections$NameTeamPos <-
-  str_trim(gsub("DL60", "", ESPNprojections$NameTeamPos))
-ESPNprojections$NameTeamPos <-
-  str_trim(gsub("DL15", "", ESPNprojections$NameTeamPos))
-
-# Char to Number
-for (i in c(1,5:ncol(ESPNprojections))) {
-  ESPNprojections[,i] <-
-    as.numeric(as.character(ESPNprojections[,i]))
-}
-
-# replace NA with 0
-ESPNprojections[is.na(ESPNprojections)] <- 0
-
-# Parse Name
-ESPNprojections$Name <-
-  gsub(",.*$", "", ESPNprojections$NameTeamPos)
-ESPNprojections$Name <-
-  str_trim(gsub('[^.a-zA-Z0-9]',' ',ESPNprojections$Name))
-
-# Sort by Points desc
-RankingsH <- ESPNprojections[order(-ESPNprojections$PTS),]
-
-##################################################################################################
-
-# Get ESPN league point projections for Pitchers
-base_url <-
-  paste0(
-    "http://games.espn.go.com/flb/tools/projections?leagueId=86607&slotCategoryGroup=2&startIndex="
-  )
-indx <-
-  list(
-    "0","40","80","120","160","200","240","280","320","360","400","440","480","520","560","600","640"
-  )   #seq(0, 640, 40)
-urls <- paste0(base_url, rep(indx, each = 1))
-
-# Scrape
-ESPNproj <-
-  lapply(urls, function(x) {
-    data.table(readHTMLTable(x, as.data.frame = TRUE, stringsAsFactors = FALSE)$playertable_0[-1,]) # removing first row
-  })
-
-# Combine Scrapes
-ESPNprojections <- c()
-for (i in c(1:15)) {
-  ESPNprojections <-
-    as.data.frame(rbind(ESPNprojections,ESPNproj[[i]]))
-}
-
-# Rename columns
-colnames(ESPNprojections) <-
-  c(
-    "Number","NameTeamPos","FA","BLANK","GS","IP","HR","BB","HB","K","SV","HD","PTS"
-  )
-
-# Remove DTD/SSPD/DL
-ESPNprojections$NameTeamPos <-
-  str_trim(gsub("DTD", "", ESPNprojections$NameTeamPos))
-ESPNprojections$NameTeamPos <-
-  str_trim(gsub("SSPD", "", ESPNprojections$NameTeamPos))
-ESPNprojections$NameTeamPos <-
-  str_trim(gsub("DL60", "", ESPNprojections$NameTeamPos))
-ESPNprojections$NameTeamPos <-
-  str_trim(gsub("DL15", "", ESPNprojections$NameTeamPos))
-
-# Char to Number
-for (i in c(1,5:ncol(ESPNprojections))) {
-  ESPNprojections[,i] <-
-    as.numeric(as.character(ESPNprojections[,i]))
-}
-
-# replace NA with 0
-ESPNprojections[is.na(ESPNprojections)] <- 0
-
-# Parse Name
-ESPNprojections$Name <-
-  gsub(",.*$", "", ESPNprojections$NameTeamPos)
-ESPNprojections$Name <-
-  str_trim(gsub('[^.a-zA-Z0-9]',' ',ESPNprojections$Name))
-
-# Sort by Points desc
-RankingsP <- ESPNprojections[order(-ESPNprojections$PTS),]
-
-
-############################################################################################
-
-
-## OLD ##
-# # Get ESPN Rankings for 2016
-# ESPN <-
-# "http://espn.go.com/fantasy/baseball/story/_/page/mlbdk2k16_pointsranks_Top300/fantasy-baseball-rankings-top-300-players-2016-points-leagues-mlb"
-# thc <- readHTMLTable(ESPN)
-# PlayerRankings <- as.data.frame(thc[2])
-# colnames(PlayerRankings) <- c("Name","Team","Points","PositionRank")
-# Rankings <- sqldf('select Name,Team,Points,PositionRank
-#                 from PlayerRankings p where Name is not null')
-#
-# Rankings$Name <- str_trim(sub('.*\\.', '', Rankings$Name))
-#
-# # Factor to Char
-# for (i in c(1:4)) {
-# Rankings[,i] <- as.character(Rankings[,i])
-# }
-#
-# # Factor to Number
-# Rankings[,3] <- as.numeric(as.character(Rankings[,3]))
-# # str(Rankings)
-
-
-#################################################################################################
-
-# Scrape Fangraphs Batting from last three years
-
-base_url <-
-  paste0(
-    "http://www.fangraphs.com/leaders.aspx?pos=all&stats=bat&lg=all&qual=200&type=c,4,5,6,8,9,10,11,14,15,16,17,18,19,20,21,22,23,34,35,40,41,43,44,45,46,47,60,107,50,58,3&season=",
-    yearto, "&month=0&season1=",
-    yearfrom, "&ind=0&team="
-  )
-teams <-
-  list(
-    "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30"
-  )
-urls <- paste0(base_url, rep(teams, each = 1),
-               "&rost=1&age=0&filter=&players=0&sort=32,d")
-# Scrape
-fangraphsB <-
-  lapply(urls, function(x) {
-    data.table(
-      readHTMLTable(x, as.data.frame = TRUE, stringsAsFactors = FALSE)$LeaderBoard1_dg1_ctl00
-    )
-  })
-
-# Combine Scrapes
-fangraphsBatting <- c()
-for (i in 1:30) {
-  fangraphsBatting <-
-    as.data.frame(rbind(fangraphsBatting,fangraphsB[[i]]))
-}
-
-# Rename columns
-colnames(fangraphsBatting) <-
-  c(
-    "Number","Name","Team","G","AB","PA","x1B","x2B","x3B","HR","BB","IBB","SO","HBP","SF","SH","GDP","SB","CS","AVG","BB_","K_","ISO","BABIP","LD_","GB_","FB_","IFFB_","HR_FB","Spd","Contact_","wOBA","WAR","Age"
-  )
-
-# Remove percentages
-for (i in c(1,4:ncol(fangraphsBatting))) {
-  fangraphsBatting[,i] <-
-    str_trim(str_replace_all(fangraphsBatting[,i],"%",""))
-}
-
-# Char to Number
-for (i in c(1,4:ncol(fangraphsBatting))) {
-  fangraphsBatting[,i] <-
-    as.numeric(as.character(fangraphsBatting[,i]))
-}
-
-# replace NA with 0
-fangraphsBatting[is.na(fangraphsBatting)] <- 0
-
-# summary(fangraphsBatting)
-
-#################################################################################################
-
-# Scrape Fangraphs Pitching from last three years
-
-base_url <-
-  paste0(
-    "http://www.fangraphs.com/leaders.aspx?pos=all&stats=pit&lg=all&qual=50&type=c,4,5,7,8,11,12,13,15,16,17,18,19,20,21,114,24,36,37,113,112,111,76,77,81,211,43,50,44,47,48,49,51,6,45,122,3,59&season=",
-    yearto, "&month=0&season1=",
-    yearfrom, "&ind=0&team="
-  )
-teams <-
-  list(
-    "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30"
-  )
-urls <- paste0(base_url, rep(teams, each = 1),
-               "&rost=1&age=0&filter=&players=0&sort=39,d")
-
-# Scrape
-fangraphsP <-
-  lapply(urls, function(x) {
-    data.table(
-      readHTMLTable(x, as.data.frame = TRUE, stringsAsFactors = FALSE)$LeaderBoard1_dg1_ctl00
-    )
-  })
-
-# Combine Scrapes
-fangraphsPitching <- c()
-for (i in 1:30) {
-  fangraphsPitching <-
-    as.data.frame(rbind(fangraphsPitching,fangraphsP[[i]]))
-}
-
-# Rename columns
-colnames(fangraphsPitching) <-
-  c(
-    "Number","Name","Team","W","L","G","GS","SV","BS","IP","H","R","ER","HR","BB","IBB","HBP","HLD","SO","K_9","BB_9","SwStr_","F_Strike_","Zone_","FBv","SL_","CB_","Pace","BABIP","IFFB_","LOB_","LD_","GB_","FB_","HR_FB","ERA","FIP","SIERA","Age","WAR"
-  )
-# str(df.pitching)
-
-# Remove percentages
-for (i in c(1,4:ncol(fangraphsPitching))) {
-  fangraphsPitching[,i] <-
-    str_trim(str_replace_all(fangraphsPitching[,i],"%",""))
-}
-
-# Char to Number
-for (i in c(1,4:ncol(fangraphsPitching))) {
-  fangraphsPitching[,i] <-
-    as.numeric(as.character(fangraphsPitching[,i]))
-}
-
-# replace NA with 0
-fangraphsPitching[is.na(fangraphsPitching)] <- 0
-
-# summary(fangraphsPitching)
-
-#################################################################################################
-
-# Scape This Year's Batting Projections for Steamer600
+fangraphsPitching <- FanGraphs.pitching(yearfrom,yearto, 50, 0) # min 50 IP
+# str(fangraphsPitching)
 
 # Streamer 600 Projections on Fangraphs
-base_url <-
-  "http://www.fangraphs.com/projections.aspx?pos=all&stats=bat&type=steamer600&team="
-teams <-
-  list(
-    "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30"
-  )
-urls <- paste0(base_url, rep(teams, each = 1),
-               "&players=0&sort=26,d")
-# Scrape
-SteamerB600 <-
-  lapply(urls, function(x) {
-    data.table(
-      readHTMLTable(x, as.data.frame = TRUE, stringsAsFactors = FALSE)$ProjectionBoard1_dg1_ctl00
-    )
-  })
+SteamerBatting600 <- SteamerBatting600()
+# str(SteamerBatting600)
 
-# Combine Scrapes
-SteamerBatting600 <- c()
-for (i in 1:30) {
-  SteamerBatting600 <-
-    as.data.frame(rbind(SteamerBatting600,SteamerB600[[i]]))
-}
-
-# Rename columns
-colnames(SteamerBatting600) <-
-  c(
-    "Name","Team","V2","PA","AB","H","x2B","x3B","HR","R","RBI","BB","SO","HBP","SB","CS","AVG","OBP","SLG","OPS","wOBA","wRC_","BsR","Fld","Off","Def","WAR"
-  )
-
-# Remove percentages
-for (i in 3:ncol(SteamerBatting600)) {
-  SteamerBatting600[,i] <-
-    str_trim(str_replace_all(SteamerBatting600[,i],"%",""))
-}
-
-# Char to Number
-for (i in 3:ncol(SteamerBatting600)) {
-  SteamerBatting600[,i] <-
-    as.numeric(as.character(SteamerBatting600[,i]))
-}
-
-# replace NA with 0
-SteamerBatting600[is.na(SteamerBatting600)] <- 0
-
-# summary(SteamerBatting600)
-
-#################################################################################################
-
-# Scape This Year's Pitching Projections Steamer600
-
-# Streamer 600 Projections on Fangraphs
-base_url <-
-  "http://www.fangraphs.com/projections.aspx?pos=all&stats=pit&type=steamer600&team="
-teams <-
-  list(
-    "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30"
-  )
-urls <- paste0(base_url, rep(teams, each = 1),
-               "&players=0&sort=19,d")
-# Scrape
-SteamerP600 <-
-  lapply(urls, function(x) {
-    data.table(
-      readHTMLTable(x, as.data.frame = TRUE, stringsAsFactors = FALSE)$ProjectionBoard1_dg1_ctl00
-    )
-  })
-
-# Combine Scrapes
-SteamerPitching600 <- c()
-for (i in 1:30) {
-  SteamerPitching600 <-
-    as.data.frame(rbind(SteamerPitching600,SteamerP600[[i]]))
-}
-
-# Rename columns
-colnames(SteamerPitching600) <-
-  c(
-    "Name","Team","V2","W","L","ERA","GS","G","SV","IP","H","ER","HR","SO","BB","WHIP","K_9","BB_9","FIP","WAR","RA9_WAR"
-  )
-
-# Remove percentages
-for (i in 3:ncol(SteamerPitching600)) {
-  SteamerPitching600[,i] <-
-    str_trim(str_replace_all(SteamerPitching600[,i],"%",""))
-}
-
-# Char to Number
-for (i in 3:ncol(SteamerPitching600)) {
-  SteamerPitching600[,i] <-
-    as.numeric(as.character(SteamerPitching600[,i]))
-}
-
-# replace NA with 0
-SteamerPitching600[is.na(SteamerPitching600)] <- 0
-
-# summary(SteamerPitching600)
+SteamerPitching600<-SteamerPitching600()
+# str(SteamerPitching600)
 
 #################################################################################################
 
@@ -718,7 +260,7 @@ batterProjections <-
     round((sp600.AB*-1)+(sp600.x1B*6)+(sp600.x2B*9)+(sp600.x3B*12)+(sp600.HR*16)+((sp600.BB+sp600.HBP)*3)+(sp600.SB*3)+(sp600.CS*-4)) as Steamer600,
     round((zip.AB*-1)+(zip.x1B*6)+(zip.x2B*9)+(zip.x3B*12)+(zip.HR*16)+((zip.BB+zip.HBP)*3)+(zip.SB*3)+(zip.CS*-4)) as Zips,
     round((sp.AB*-1)+(((fp.x1B/fp.AB)*sp.AB)*6)+(((fp.x2B/fp.AB)*sp.PA)*9)+(((fp.x3B/fp.AB)*sp.AB)*12)+(((fp.HR/fp.AB)*sp.AB)*16)+((((fp.BB+fp.HBP)/fp.AB)*sp.AB)*3)+(((fp.SB/fp.AB)*sp.AB)*3)+(((fp.CS/fp.AB)*sp.AB)*-4)) as Avg3Yrs
-    from RankingsH r
+    from WARGamesHitters r
     join EligibilityH e on e.Name = r.Name
     left join SteamerBatting sp on trim(upper(sp.Name)) = trim(upper(r.Name))
     left join SteamerBatting600 sp600 on lower(sp600.Name) = lower(r.Name)
@@ -770,7 +312,7 @@ pitcherProjections <-
     round((zip.IP*4.5)+(zip.SO*2)+((zip.BB)*-3)+(zip.HR*-13)+(sp.SV*12)) as Zips,
     round((sp.IP*4.5)+(((fp.SO / fp.IP)*sp.IP)*2)+(((fp.BB/fp.IP)*sp.IP)*-3)+
     (((fp.HR/fp.IP)*sp.IP)*-13)+(((fp.SV/fp.IP)*sp.IP)*12)+(((fp.HLD/fp.IP)*sp.IP)*9)) as Avg3Yrs
-    from RankingsP r
+    from WARGamesPitchers r
     join EligibilityP e on e.Name = r.Name
     left join SteamerPitching sp on lower(sp.Name) = lower(r.Name)
     left join SteamerPitching600 sp600 on lower(sp600.Name) = lower(r.Name)
@@ -816,7 +358,8 @@ projections <- rbind(sub.batterProjections,sub.pitcherProjections)
 projections$MyDraft <-
   rank(-projections$AvgProj,ties.method = "first");
 projections <- projections[order(projections$MyDraft),]
-projections$MyDraftRound <- rep(1:110, each = 10, length = nrow(projections))
+projections$MyDraftRound <-
+  rep(1:110, each = 10, length = nrow(projections))
 
 # Get ESPN ADP
 ESPN.ADP <- "http://games.espn.go.com/flb/livedraftresults"
@@ -838,7 +381,8 @@ projections$RotoADP <-
   iif(is.na(projections$RotoADP),projections$AvgProjRank,projections$RotoADP)
 
 # My draft pick vs League ADP
-projections$LeagueADP <- rank(-projections$ESPN,ties.method = "first")
+projections$LeagueADP <-
+  rank(-projections$ESPN,ties.method = "first")
 
 # Sort so we can produce expected round based on 10 team league
 projections <- projections[order(-projections$ESPN),]
@@ -850,7 +394,7 @@ projections$Round <-
 # Difference between my projections and ESPN ADP on ESPN (converted to rounds)
 # Assign my expected round based on 10 team league based on ESPN projections
 # LOOKING FOR NEGATIVE NUMBERS - GOOD!
-projections$RoundDiff <- 
+projections$RoundDiff <-
   round((projections$MyDraftRound - projections$Round))
 
 # Reorder columns
@@ -861,7 +405,7 @@ head(projections,50)
 
 # Export to WD
 csv_name <- paste("Draft",".csv", sep = '')
-write.table(projections,file = csv_name,sep = ",",row.names = F)
+# write.table(projections,file = csv_name,sep = ",",row.names = F)
 
 #################################################################################################
 #################################################################################################
