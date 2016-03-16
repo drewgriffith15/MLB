@@ -2,19 +2,20 @@
 # http://games.espn.go.com/flb/tools/projections?leagueId=86607
 
 # Load libraries
-library("griffun")
-library("XML")
-library("stringr")
-library("ggplot2")
-library("plyr")
-library("data.table")
-library("sqldf")
+library(devtools)
+devtools::install_github('almartin82/projprep')
+library(projprep)
+
+library(devtools)
+devtools::install_github('drewgriffith15/griffun')
+library(griffun)
+
 
 #################################################################################################
 
 # Get ESPN league Position Eligibility for Hitters AND Pitchers
-EligibilityH <- ESPN.eligibility()$Hitters
-EligibilityP <- ESPN.eligibility()$Pitchers
+EligibilityH <- ESPNeligibility()$Hitters
+EligibilityP <- ESPNeligibility()$Pitchers
 
 # Get ESPN league point projections for Hitters AND Pitchers in WAR Games league
 WARGamesHitters <- ESPNProjections(86607)$Hitters
@@ -29,11 +30,10 @@ yearfrom <-
         3,as.numeric(format(Sys.time(), "%Y")) - 2)
 
 # Scrape Fangraphs leaderboards from last three years
-fangraphsBatting <- FanGraphs.hitting(yearfrom,yearto, 200, 0) # min 200 PA
-# str(fangraphsBatting)
+fangraphsBatting <- fangraphs_leaderboard('bat',yearfrom,yearto, 200, 0)
+str(fangraphsBatting)
 
-fangraphsPitching <- FanGraphs.pitching(yearfrom,yearto, 50, 0) # min 50 IP
-# str(fangraphsPitching)
+fangraphsPitching <- fangraphs_leaderboard('pit',yearfrom,yearto, 50, 0)
 
 # Streamer 600 Projections on Fangraphs
 SteamerBatting600 <- SteamerBatting600()
@@ -41,6 +41,7 @@ SteamerBatting600 <- SteamerBatting600()
 
 SteamerPitching600<-SteamerPitching600()
 # str(SteamerPitching600)
+
 
 #################################################################################################
 
