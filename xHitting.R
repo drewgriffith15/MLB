@@ -1,178 +1,177 @@
-# Analysis based on following article on Fangraphs:
+# Analysis based on following articles:
 # http://www.fangraphs.com/fantasy/muscling-up-iso-surgers/
+# http://www.fangraphs.com/fantasy/2015-expected-iso-xiso-in-review/
 # http://www.fangraphs.com/fantasy/new-hitter-xbabip-based-on-bis-batted-ball-data/
-# http://www.fangraphs.com/fantasy/nl-outfield-poweriso-buy-low-candidates/
+# http://www.fangraphs.com/fantasy/the-xhrfb-rate-equation-unmasked/
 # http://www.fangraphs.com/fantasy/is-it-time-to-move-past-hrfb-rate/
+# http://www.fangraphs.com/fantasy/espn-home-run-tracker-analysis-the-2016-hrfb-downsiders/
+# http://www.baseballprospectus.com/article.php?articleid=28956
+# http://www.fangraphs.com/blogs/launch-angle-matt-duffy-and-potential-power-surges/
+# http://www.hardballtimes.com/improving-projections-with-exit-velocity/
+# http://www.fangraphs.com/fantasy/xoba-and-using-statcast-data-to-measure-offensive/
 
-# Load libraries
-library("griffun")
-library("XML")
-library("stringr")
-library("plyr")
-library("data.table")
-library("sqldf")
+# Load libraries from github
+library(devtools)
+devtools::install_github('drewgriffith15/griffun')
+library(griffun)
+devtools::install_github('almartin82/projprep')
+library(projprep)
+library(sqldf)
 
-# Scrape Fangraphs current year
-# Get year
-yearto <-
+setwd("/Users/wgriffith2/Dropbox/R/MLB") #;getwd()
+
+currentyear <-
   iif(as.numeric(format(Sys.time(), "%m%d")) <= 331,as.numeric(format(Sys.time(), "%Y")) -
         1,as.numeric(format(Sys.time(), "%Y")))
+last30date <- as.character(as.Date(format(Sys.time(), "%Y-%m-%d")) - 30)
 
-base_url <-
-  paste0(
-    "http://www.fangraphs.com/leaders.aspx?pos=all&stats=bat&lg=all&qual=y&type=c,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,57,58,60,72,73,74,75,76,77,78,79,80,81,82,83,102,103,104,105,106,107,108,109,110,206,207,208,209,210,211&season=",
-    yearto, "&month=3&season1=", # month=0 - full season; month=3 - 30 days
-    yearto, "&ind=0&team="
-  )
-teams <-
-  list(
-    "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30"
-  )
-urls <- paste0(base_url, rep(teams, each = 1),
-               "&rost=1&age=0&filter=&players=0&sort=32,d")
-# Scrape
-fangraphsB <-
-  lapply(urls, function(x) {
-    data.table(
-      readHTMLTable(x, as.data.frame = TRUE, stringsAsFactors = FALSE)$LeaderBoard1_dg1_ctl00
-    )
-  })
+q <- 60 # PAs qualifier (min PAs)
 
-# Combine Scrapes
-fangraphsBatting <- c()
-for (i in 1:30) {
-  fangraphsBatting <-
-    as.data.frame(rbind(fangraphsBatting,fangraphsB[[i]]))
-}
-
-# Rename columns
-colnames(fangraphsBatting) <-
-  c(
-    "RowID","Name","Team","Age","G","AB","PA","H","1B","2B","3B","HR","R","RBI","BB","IBB","SO","HBP","SF","SH","GDP","SB","CS","AVG","GB","FB","LD","IFFB","Pitches","Balls","Strikes","IFH","BU","BUH","BB_","K_","BB_K","OBP","SLG","OPS","ISO","BABIP","GB_FB","LD_","GB_","FB_","IFFB_","HR_FB","IFH_","BUH_","wOBA","RAR","WAR","Spd","FB__","FBv","SL_","SLv","CT_","CTv","CB_","CBv","CH_","CHv","SF_","SFv","O_Swing_","Z_Swing_","Swing_","O_Contact_","Z_Contact_","Contact_","Zone_","F_Strike_","SwStr_","Pull_","Cent_","Oppo_","Soft_","Med_","Hard_"
-  )
-head(fangraphsBatting)
-# Remove percentages
-for (i in c(1,4:ncol(fangraphsBatting))) {
-  fangraphsBatting[,i] <-
-    str_trim(str_replace_all(fangraphsBatting[,i],"%",""))
-}
-
-# Char to Number
-for (i in c(1,4:ncol(fangraphsBatting))) {
-  fangraphsBatting[,i] <- as.numeric(as.character(fangraphsBatting[,i]))
-}
+# Scrape Fangraphs last 30 days; get last year if its before the season starts
+fangraphsHitting <-
+  griffun::fangraphs_leaderboard('bat',currentyear,currentyear,qual = q, split = 3)
 
 # Calculated HR/Batted Ball
-fangraphsBatting$HR_BB <-
-  iif(fangraphsBatting$HR > 0,round((
-    fangraphsBatting$HR / (
-      fangraphsBatting$LD + fangraphsBatting$GB + fangraphsBatting$FB + fangraphsBatting$BUH
+fangraphsHitting$HR_BB <-
+  iif(fangraphsHitting$HR > 0,round((
+    fangraphsHitting$HR / (
+      fangraphsHitting$LD + fangraphsHitting$GB + fangraphsHitting$FB + fangraphsHitting$BUH
     )
   ) * 100,2), 0)
 
 # replace NA with 0
-fangraphsBatting[is.na(fangraphsBatting)] <- 0
+fangraphsHitting[is.na(fangraphsHitting)] <- 0
 
-
-# summary(fangraphsBatting)
-
-# Scrape Batted Ball Distance/Velocity Data from Baseball Savant
-htmltbl <-
-  readHTMLTable(doc = "http://baseballsavant.com/apps/hit_leader.php?game_date=&abs=20&sort=5,1")
-babip <- data.frame(htmltbl[1])
-colnames(babip) <-
+# Scrape Zips ROS projections current year
+# FYI: There are duplicates in this list bc of the URL field (multiple positions)
+rzips <- scrape_fangraphs(bat_pitch = 'bat',proj_system = 'rzips')
+# replace NA with 0
+rzips[is.na(rzips)] <- 0
+# names(rzips)
+colnames(rzips) <-
   c(
-    "Rank","Name","AB","MaxExitVel","MinExitVel","AvgExitVel","AvgFB_LDExitVel","AvgGBExitVel","MaxDistance","AvgDist","AvgHRDistance"
+    "Name","V1","Team","G","PA","AB","H","x2B","x3B","HR","R","RBI","BB","SO","HBP","SB","CS","AVG","OBP","SLG","OPS","wOBA","Fld","BsR","WAR","url","V2"
   )
+
+rzips <- sqldf(
+  "select distinct ros.NAME as Name,
+  round((ros.ab * -1) + (ros.x1B * 6) + (ros.x2B * 9) + (ros.x3B * 12) + (ros.HR * 16) + ((ros.BB + ros.HBP) * 3) + (ros.SB * 3) + (ros.CS * -4),0) as Points
+  from (
+  select rzips.*, H - (x2B + x3B + HR) as x1B
+  from rzips) ros"
+); rzips[is.na(rzips)] <- 0
+
+# Scrape Batted Ball Distance/Velocity Data from Savant / MLB statcast
+statcast<-statcast_leaderboard('bat', currentyear, last30date, 20)
+
+# Calculate MLB AVGs
+avg.dist <- round(mean(statcast$Avg_Distance),2)
+avg.velo <- round(mean(statcast$Avg_Exit_Velocity),2)
+
 # Merging datasets for analysis
 xHit <- sqldf(
-  "SELECT a.NAME,Age,
-  BABIP,GB_FB,LD_,GB_,FB_,IFFB_,IFH_,Pull_,Cent_,Oppo_,Soft_,Med_,Hard_,Contact_,Spd,
-  ISO,HR_BB,
+  "SELECT distinct a.NAME,Age,
+  BABIP,LD_pct,GB_pct,K_pct,BB_pct,
+  FB_pct,IFFB_pct,IFH_pct,
+  Pull_pct,Cent_pct,Oppo_pct,
+  Soft_pct,Med_pct,Hard_pct,
+  Spd,ISO,HR_BB,
   HR_FB,wOBA,
-  round(AvgExitVel) as AvgExitVel,round(AvgDist) as AvgDist
-  FROM fangraphsBatting a
-  JOIN babip b ON a.NAME = b.NAME
+  round(Avg_Exit_Velocity) as AvgExitVelocity,
+  round(Avg_Distance) as AvgDistance,
+  r.points
+  FROM fangraphsHitting a
+  left JOIN statcast b ON lower(b.NAME) = lower(a.NAME)
+  left JOIN rzips r on lower(r.Name) = lower(a.NAME)
   "
-)
+  )
 
-############### xPected XBABIP #######################
+# replace NA with league avg
+xHit$AvgDistance <-
+  ifelse(is.na(xHit$AvgDistance),avg.dist,xHit$AvgDistance)
+xHit$AvgExitVelocity <-
+  ifelse(is.na(xHit$AvgExitVelocity),avg.velo,xHit$AvgExitVelocity)
+
+############### xPected wOBA #######################
+xOBA.fit <- lm(
+  wOBA ~ BABIP + LD_pct + GB_pct + K_pct + BB_pct +
+    FB_pct + Pull_pct + Hard_pct +
+    Spd + AvgDistance + AvgExitVelocity, data = xHit
+)
+summary(xOBA.fit); unadj.rsquared(xOBA.fit)
+xOBA_out <-
+  cbind(
+    xHit,'xOBA' = round(xOBA.fit$fitted.values,3), 'Gap' = round(xOBA.fit$residuals,3)
+  )
+xOBA_out <-
+  subset(xOBA_out, select = c(Name,HR_BB,Hard_pct,AvgDistance,AvgExitVelocity,wOBA,xOBA,Gap))
+xOBA_out <- xOBA_out[order(-xOBA_out$Gap),]
+# plot(xOBA_out$wOBA ~ xOBA_out$xOBA, ylab="wOBA", xlab="xOBA", main="wOBA vs xOBA"); abline(0,1)
+
+############### xPected BABIP #######################
 xBABIP.fit <-
-  lm(BABIP ~ GB_FB + LD_ + FB_ + IFFB_ + IFH_ + Pull_ + Cent_ + Oppo_ + Hard_ +
-       Spd + AvgExitVel, data = xHit)
-summary(xBABIP.fit)
+  lm(BABIP ~ LD_pct + FB_pct + IFH_pct + Hard_pct + Spd + Oppo_pct + AvgDistance + AvgExitVelocity, data = xHit)
+summary(xBABIP.fit); unadj.rsquared(xBABIP.fit)
 xBABIP_out <-
   cbind(
     xHit,'xBABIP' = round(xBABIP.fit$fitted.values,3), 'Gap' = round(xBABIP.fit$residuals,3)
   )
-xBABIP_out <- subset(xBABIP_out, select = c(Name,BABIP,xBABIP,Gap))
-xBABIP_out <- xBABIP_out[order(xBABIP_out$xBABIP),]
+xBABIP_out <-
+  subset(xBABIP_out, select = c(Name,HR_BB,Hard_pct,AvgDistance,AvgExitVelocity,BABIP,xBABIP,Gap))
+xBABIP_out <- xBABIP_out[order(xBABIP_out$Gap),]
+# plot(xBABIP_out$BABIP ~ xBABIP_out$xBABIP, ylab="BABIP", xlab="xBABIP", main="BABIP vs xBABIP"); abline(0,1)
 
 ############### xPected ISO #########################
-xISO.fit <- lm(ISO ~ FB_ + Pull_ + Hard_ + AvgDist + AvgExitVel, data =
-                 xHit)
-summary(xISO.fit)
+xISO.fit <-
+  lm(ISO ~ FB_pct + LD_pct + Hard_pct + Pull_pct + FB_pct + K_pct + AvgDistance + AvgExitVelocity, data =
+       xHit)
+summary(xISO.fit); unadj.rsquared(xISO.fit)
 xISO_out <-
   cbind(
     xHit,'xISO' = round(xISO.fit$fitted.values,3), 'Gap' = round(xISO.fit$residuals,3)
   )
 xISO_out <-
-  subset(xISO_out, select = c(Name,Hard_,AvgDist,ISO,xISO,Gap))
-xISO_out <- xISO_out[order(xISO_out$xISO),]
+  subset(xISO_out, select = c(Name,HR_BB,Hard_pct,AvgDistance,AvgExitVelocity,ISO,xISO,Gap))
+xISO_out <- xISO_out[order(xISO_out$Gap),]
+# plot(xISO_out$ISO ~ xISO_out$xISO, ylab="ISO", xlab="xISO", main="ISO vs xISO"); abline(0,1)
 
 ############### xPected HR_BB#################
 xHR.BB.fit <-
-  lm(HR_BB ~ +FB_ + Pull_ + Hard_ + AvgDist + AvgExitVel, data = xHit)
-summary(xHR.BB.fit)
+  lm(HR_BB ~ + FB_pct + Pull_pct + Hard_pct + AvgDistance + AvgExitVelocity, data = xHit)
+summary(xHR.BB.fit); unadj.rsquared(xHR.BB.fit)
 xHR_BB_output <-
   cbind(
-    xHit,'xHR_BB' = round(xHR.BB.fit$fitted.values,2), 'Gap' = round(xHR.BB.fit$residuals,2)
+    xHit,'xHR_BB' = round(xHR.BB.fit$fitted,2), 'Gap' = round(xHR.BB.fit$residuals,2)
   )
 xHR_BB_output <-
-  subset(xHR_BB_output, select = c(Name,Hard_,AvgDist,HR_BB,xHR_BB,Gap))
-xHR_BB_output <- xHR_BB_output[order(xHR_BB_output$xHR_BB),]
+  subset(xHR_BB_output, select = c(Name,Hard_pct,Pull_pct,AvgDistance,AvgExitVelocity,HR_BB,xHR_BB,Gap))
+xHR_BB_output <- xHR_BB_output[order(xHR_BB_output$Gap),]
+xHR_BB_output <- subset(xHR_BB_output, xHR_BB > 0)
+# plot(xHR_BB_output$HR_BB ~ xHR_BB_output$xHR_BB, ylab="HR_BB", xlab="xHR_BB", main="HR_BB vs xHR_BB"); abline(0,1)
 
 projectx <-
   sqldf(
-    "select h.Name, h.AvgExitVel as AvgVelo, h.AvgDist as AvgDist,
-    h.Hard_,h.Pull_,Contact_,
-    a.xBABIP, b.ISO, b.xISO,
-    c.HR_BB,c.xHR_BB,
-    b.Gap as GAPxISO,c.Gap as GAPxHR_BB,
-    h.wOBA
+    "select distinct h.Name, h.AvgDistance,h.AvgExitVelocity,
+    h.FB_pct, h.LD_pct, h.Hard_pct, h.Pull_pct,
+    h.BABIP, a.xBABIP, b.ISO, b.xISO,
+    c.HR_BB,c.xHR_BB,o.wOBA, o.xOBA, 
+    a.Gap as GapxBABIP, b.Gap as GAPxISO,c.Gap as GAPxHR_BB, o.Gap as GapxOBA,
+    h.Points as ROS
     from xHit h
-    join xBABIP_out a on h.name = a.name
+    join xOBA_out o on o.name = h.name
+    join xBABIP_out a on a.name = h.name
     join xISO_out b on b.Name = h.Name
     join xHR_BB_output c on c.name = h.name
-    order by b.gap desc
+    order by o.Gap desc
     "
   )
-
-################xPected wOBA ##########################
-
-# Using the xBABIP,xISO and xHR_BB, calculate the xwOBA
-wOBA.fit <-
-  lm(wOBA ~ +Hard_ + Pull_ + Contact_ + AvgVelo + AvgDist + xBABIP + xISO +
-       xHR_BB, data = projectx)
-summary(wOBA.fit)
-xwOBA_output <-
-  cbind(
-    projectx,'xwOBA' = round(wOBA.fit$fitted.values,3), 'GapxwOBA_' = round(wOBA.fit$residuals,3)
-  )
-xwOBA_output <-
-  subset(
-    xwOBA_output, xHR_BB > 0, select = c(
-      Name,AvgVelo,AvgDist,Hard_,Pull_,ISO,xISO,HR_BB,xHR_BB,wOBA,xwOBA,GAPxISO,GAPxHR_BB,GapxwOBA_
-    )
-  )
-xHitting <- xwOBA_output[order(-xwOBA_output$GAPxISO),]
 
 #######################################################
 
 # Aim for players with -Gap
 
-tail(xHitting,25)
+# tail(projectx,15)
 csv_name <- paste("xHitting",".csv", sep = '')
-write.table(xHitting,file = csv_name,sep = ",",row.names = F)
+write.table(projectx,file = csv_name,sep = ",",row.names = F)
 
 # END
